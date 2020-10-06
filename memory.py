@@ -95,8 +95,11 @@ class Memory:
         pr_el = None
         if not self.edit:
             pr_el = self.remove(pos)
-            self.actions.pop()
-            self.actions.append((self.replace, pos, pr_el))
+            action = (self.insert, pos)
+            if pr_el != None:
+                action = (self.replace, pos, pr_el)
+                self.actions.pop()
+            self.actions.append(action)
         self.insert(pos, elem)
         if self.edit:
             self.actions.pop()

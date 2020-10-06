@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 
 
 from console import Console
@@ -44,6 +44,7 @@ class Hex:
                         b'\x13': self.save,
                         b'\x11': self.exit,
                         b'\x0f': self.open,
+                        b'\x06': self.find,
                         b'\x07': self.go,
                         b'\x15': self.rewrite_buffer,
                         b'\x18': self.manip.cut,
@@ -100,6 +101,26 @@ class Hex:
         name = self.cons.get_name("Save as...")
         if name:
             self.manip.save(name)
+
+    def _hesh(self, data):
+        res = 0
+        for i in data:
+            res = res * 277 + i
+        return res
+
+    def find(self):
+        print(hex(self.manip.mem.fsize))
+        string = self.cons.get_name("Find...").encode()
+        sub_sum = self._hesh(string)
+        summ = self._hesh(self.manip.mem.get_data(0, len(string)))
+        i = len(string)
+        mod = 277 ** i
+        while i <= self.manip.mem.fsize:
+            if sub_sum == summ:
+                self.manip.go(i-len(string))
+                break
+            summ = (summ * 277 + self.manip.mem.get_data(i, 1)[0]) % mod
+            i += 1
 
     def open(self):
         self.manip.open(self.cons.get_name("Open file..."))
