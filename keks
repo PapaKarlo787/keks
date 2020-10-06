@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+
+
+from console import Console
+from manipulator import Manipulator, Mode
+import argparse
+import console
+import os
+import sys
+
+
+hex_set = set(b'0123456789abcdef')
+
+
+def num_to_int(num):
+    return int(num, 16) if len(num) > 2 and num[1] in "x" else int(num)
+
+
+class Hex:
+    def __init__(self, fn, ro_mode):
+        self.manip = Manipulator(fn)
+        self.cons = Console(self.manip)
+        self.is_ro = ro_mode
+        if ro_mode:
+            self.cons.ext_data = "read_only"
+        self.manip.mem.show_info = self.cons.show_info
+        self.actived = True
+        self.actions = {b'\x1b[A': self.manip.mu_cursor,
+                        b'\x1b[B': self.manip.md_cursor,
+                        b'\x1b[C': self.manip.mr_cursor,
+                        b'\x1b[D': self.manip.ml_cursor,
+                        b'\x1b[F': self.manip.go_end,
+                        b'\x1b[H': self.manip.go_begin,
+                        b'\t': self.manip.change_window,
+                        b'\x1b[5~': self.manip.prev_page,
+                        b'\x1b[6~': self.manip.next_page,
+                        b'\x12': self.manip.change_mode,
+                        b'\x7f': self.manip.backspase,
+                        b'\x1b[3~': self.manip.delete,
+                        b'\x1a': self.manip.undo,
+                        b'\x19': self.manip.redo,
+                        b'\x04': self.manip.delete,
+                        b'\x1b\x13': self.save_name,
+                        b'\x13': self.save,
+                        b'\x11': self.exit,
+                        b'\x0f': self.open,
+                        b'\x06': self.find,
+                        b'\x07': self.go,
+                        b'\x15': self.rewrite_buffer,
+                        b'\x18': self.manip.cut,
+                        b'\x03': self.manip.copy,
+                        b'\x16': self.manip.paste,
+                        b'\x1b[1;2D': self.manip.sel_l,
+                        b'\x1b[1;2A': self.manip.sel_u,
+                        b'\x1b[1;2C': self.manip.sel_r,
+                        b'\x1b[1;2B': self.manip.sel_d}
+        self.immut_actions = [b'\x1b[A', b'\x1b[B', b'\x1b[C', b'\x1b[D',
+                              b'\x1b[F', b'\x1b[H', b'\t', b'\x1b[5~',
+                              b'\x1b[6~', b'\x12', b'\x11', b'\x0f', b'\x07']
+        self.rem_sel = [b'\x1b[A', b'\x1b[B', b'\x1b[C', b'\x1b[D', b'\x1b[F',
+                        b'\x1b[H', b'\x1a', b'\x19', b'\x0f', b'\x18',
+                        b'\x16', b'\x11', b'\x1b[3~', b'\x04', b'\x7f']
+        self.mode_action = {Mode.edit: self.manip.replace,
+                            Mode.append: self.manip.insert}
+        self.cons.update()
+
+    def main(self):
+        while self.actived:
+            try:
+                self.act(self.cons.get_key())
+            except Exception as e:
+                self.cons.message(str(e))
+                self.cons.update()
+
+    def act(self, key):
+        is_let = len(key) == 1 and key.decode().isprintable()
+        is_num = key[0] in hex_set
+        can_move = False
+        if key in self.actions or self.is_ro:
+            if self.is_ro and key not in self.immut_actions:
+                return
+            self.actions[key]()
+            self.manip.mem.edit = False
+        elif self.manip.main and is_num:
+            key = key[0] - 48 if key.decode().isdigit() else key[0] - 87
+            can_move = self.manip.mem.edit
+            self.mode_action[self.manip.mode](key)
+        elif is_let and not self.manip.main:
+            key = key[0]
+            self.mode_action[self.manip.mode](key // self.manip.lr)
+            self.mode_action[self.manip.mode](key % self.manip.lr)
+            can_move = True
+        if can_move:
+            self.manip.mr_cursor()
+        if key in self.rem_sel or key not in self.actions:
+            self.manip.selected_area = None
+        if key != b'\x11':
+            self.cons.update()
+
+    def save_name(self):
+        name = self.cons.get_name("Save as...")
+        if name:
+            self.manip.save(name)
+
+    def _hesh(self, data):
+        res = 0
+        for i in data:
+            res = res * 277 + i
+        return res
+
+    def find(self):
+        string = self.cons.get_name("Find...").encode()
+        sub_sum = self._hesh(string)
+        summ = self._hesh(self.manip.mem.get_data(0, len(string)))
+        i = len(string)
+        mod = 277 ** i
+        while i <= self.manip.mem.fsize:
+            if sub_sum == summ:
+                self.manip.go(i-len(string))
+                break
+            summ = (summ * 277 + self.manip.mem.get_data(i, 1)[0]) % mod
+            i += 1
+
+    def open(self):
+        self.manip.open(self.cons.get_name("Open file..."))
+
+    def go(self):
+        num = self.cons.get_number()
+        if num:
+            self.manip.go(num_to_int(num))
+
+    def save(self):
+        if self.manip.mem.is_fake and not self.cons.mem.fn:
+            name = self.cons.get_name("Save as...")
+            if not name:
+                return
+            self.manip.save(name)
+        else:
+            if self.manip.mem.is_fake:
+                open(self.manip.mem.fn, 'wb').close()
+            self.manip.save()
+        self.cons.message("Saved")
+
+    def exit(self):
+        self.actived = False
+        header = "Do you want to save?(y/N)"
+        ansver = self.cons.get_name(header) if self.manip.mem.actions else None
+        if ansver == "y":
+            (self.save if self.cons.mem.fn else self.save_name)()
+        self.cons.exit()
+        self.manip.exit()
+
+    def rewrite_buffer(self):
+        start = self.cons.get_number("Set start")
+        finish = self.cons.get_number("Set end")
+        byte = self.cons.get_number("Set byte")
+        if start and finish and byte:
+            start = num_to_int(start)
+            finish = num_to_int(finish)
+            start, finish = (min(start, finish), max(start, finish)+1)
+            byte = num_to_int(byte)
+            if byte < 256:
+                self.manip.go(start)
+                for _ in range(start, finish):
+                    self.manip.replace(byte // self.manip.lr)
+                    self.manip.replace(byte % self.manip.lr)
+                    self.manip.mr_cursor()
+            else:
+                self.cons.message("Too long for byte")
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file", type=str, default=None,
+                        help="open file", nargs='?')
+    parser.add_argument("-r", action='store_true',
+                        help="set read only mode")
+    args = parser.parse_args()
+    try:
+        Hex(args.file, args.r).main()
+    except Exception as e:
+        sys.exit(e)
