@@ -40,6 +40,7 @@ class Hex:
                         b'\x1a': self.manip.undo,
                         b'\x19': self.manip.redo,
                         b'\x04': self.manip.delete,
+                        b'\x01': self.manip.select_all,
                         b'\x1b\x13': self.save_name,
                         b'\x13': self.save,
                         b'\x11': self.exit,
@@ -53,13 +54,18 @@ class Hex:
                         b'\x1b[1;2D': self.manip.sel_l,
                         b'\x1b[1;2A': self.manip.sel_u,
                         b'\x1b[1;2C': self.manip.sel_r,
-                        b'\x1b[1;2B': self.manip.sel_d}
+                        b'\x1b[1;2B': self.manip.sel_d,
+                        b'\x1b[1;2F': self.manip.sel_go_end,
+                        b'\x1b[1;2H': self.manip.sel_go_begin,
+                        b'\x1b[6;2~': self.manip.sel_pg_dn,
+                        b'\x1b[5;2~': self.manip.sel_pg_up}
         self.immut_actions = [b'\x1b[A', b'\x1b[B', b'\x1b[C', b'\x1b[D',
                               b'\x1b[F', b'\x1b[H', b'\t', b'\x1b[5~',
                               b'\x1b[6~', b'\x12', b'\x11', b'\x0f', b'\x07']
-        self.rem_sel = [b'\x1b[A', b'\x1b[B', b'\x1b[C', b'\x1b[D', b'\x1b[F',
-                        b'\x1b[H', b'\x1a', b'\x19', b'\x0f', b'\x18',
-                        b'\x16', b'\x11', b'\x1b[3~', b'\x04', b'\x7f']
+        self.rem_sel = [b'\x1b[A', b'\x1b[B', b'\x1b[C', b'\x1b[D', b'\x1a',
+						b'\x19', b'\x0f', b'\x18', b'\x16', b'\x11', b'\x04',
+						b'\x1b[3~', b'\x7f', b'\x1b[F', b'\x1b[H', b'\x1b[5~',
+                        b'\x1b[6~']
         self.mode_action = {Mode.edit: self.manip.replace,
                             Mode.append: self.manip.insert}
         self.cons.update()
@@ -109,16 +115,21 @@ class Hex:
         return res
 
     def find(self):
+        cp = self.manip.get_cp()
         string = self.cons.get_name("Find...").encode()
         sub_sum = self._hesh(string)
-        summ = self._hesh(self.manip.mem.get_data(0, len(string)))
-        i = len(string)
-        mod = 277 ** i
+        summ = self._hesh(self.manip.mem.get_data(cp + 1, len(string)))
+        i = cp + len(string) + 1
+        mod = 277 ** len(string)
         while i <= self.manip.mem.fsize:
             if sub_sum == summ:
                 self.manip.go(i-len(string))
                 break
-            summ = (summ * 277 + self.manip.mem.get_data(i, 1)[0]) % mod
+            next_sym = self.manip.mem.get_data(i, 1)
+            if not next_sym:
+                self.cons.message("No match")
+                break
+            summ = (summ * 277 + next_sym[0]) % mod
             i += 1
 
     def open(self):

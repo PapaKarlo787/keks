@@ -102,11 +102,26 @@ class Manipulator:
             self.cursor = (y, x+1)
         self.check()
 
+    def sel_go_end(self):
+        self._select_and_act(self.go, (self.mem.fsize,))
+
+    def sel_go_begin(self):
+        self._select_and_act(self.go, (0,))
+
     def go_end(self):
         self.go(self.mem.fsize)
 
     def go_begin(self):
         self.go(0)
+
+    def sel_pg_dn(self):
+        self._select_and_act(self.next_page)
+
+    def sel_pg_up(self):
+        self._select_and_act(self.prev_page)
+
+    def select_all(self):
+        self.selected_area = (0, self.mem.fsize)
 
     def get_cp(self):
         row = self.win_y_loc + self.cursor[0] - 1
@@ -202,11 +217,11 @@ class Manipulator:
 
 # -------------------------------------------------------------------- #
 
-    def _select_and_act(self, func):
+    def _select_and_act(self, func, data = ()):
         start = self.selected_area[0] if self.selected_area else self.get_cp()
         if start > self.mem.fsize:
             start = self.mem.fsize
-        func()
+        func(*data)
         end = self.get_cp()
         self.selected_area = None if start == end else (start, end)
 
