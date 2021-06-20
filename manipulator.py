@@ -198,6 +198,7 @@ class Manipulator:
             self.mode = Mode.edit
 
     def save(self, name=None):
+        print(self.mem.blocks)
         blocks = self.mem.blocks
         info = self.mem.show_info
         try:

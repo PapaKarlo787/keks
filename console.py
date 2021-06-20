@@ -12,6 +12,7 @@ class Console:
         curses.init_pair(2, curses.COLOR_BLUE, curses.COLOR_WHITE)
         curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)
         curses.init_pair(4, curses.COLOR_GREEN, curses.COLOR_BLUE)
+        curses.init_pair(5, curses.COLOR_RED, curses.COLOR_GREEN)
         curses.curs_set(False)
         curses.noecho()
         curses.raw()
@@ -39,6 +40,8 @@ class Console:
         key = self.get_key(False)
         window.clear()
         window.refresh()
+        self.pad.clear()
+        self.update()
         return key
 
     def get_number(self, message="Set byte"):
@@ -136,8 +139,10 @@ class Console:
 
     def _set_correct_cursor(self):
         y, x = self.source.cursor
-        x, count = (x*3+12, 2) if self.main else (x+self.lm+1, 1)
-        self.pad.chgat(y+1, x, count, curses.color_pair(2))
+        _x, count = (x*3+12, 2) if self.main else (x+self.lm+1, 1)
+        self.pad.chgat(y+1, _x, count, curses.color_pair(2))
+        _x, count = (x*3+12, 2) if not self.main else (x+self.lm+1, 1)
+        self.pad.chgat(y+1, _x, count, curses.color_pair(5))
 
     def _get_key(self):
         key = self.pad.getkey().encode()
@@ -159,7 +164,7 @@ class Console:
             n = self.creator.lines[i] if i < len_l else " "*(self.lm+self.lr+1)
             self.pad.addstr(i+2, 0, n, curses.color_pair(1))
         header = "{}    {} {}".format(self.mem.fn, self.mode, self.ext_data)
-        numbers = ["{}   ".format("x"*8)]
+        numbers = ["Offset     "]
         nums = ""
         for i in range(self.lr):
             numbers.append("0{} ".format(hex(i)[2]))

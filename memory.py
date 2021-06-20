@@ -178,7 +178,7 @@ class Memory:
                 blocks.append(block)
             else:
                 block[3].insert(pos, elem*16)
-                blocks.append((block[0], len(block[3]), block[2], block[3]))
+                blocks.append((self.blocks[i][0], len(block[3]), block[2], block[3]))
         else:
             start = block[0] + pos
             elem *= 16
@@ -236,12 +236,14 @@ class Memory:
 
     def _save(self, block, fo):
         if block[2]:
-            fo.seek(max(self.fp, block[0]))
-            self.data += fo.read(block[1])
+            _len = max(self.fp + block[1] - block[0], 0)
+            fo.seek(block[0])
+            if not self.data:
+                self.data += fo.read(_len)
+            print(_len)
             fo.seek(self.fp)
             self.fp += fo.write(bytes(block[3]))
         else:
-            self.data = self.data[block[0]-self.ifp:]
             if not self.data and self.fp == block[0]:
                 if block[1] == -1:
                     return True
@@ -252,9 +254,10 @@ class Memory:
 
     def _rewrite(self, start, size, foi, foo):
         data = b'1'
+        bs = 1024
         while size if size > -1 else data:
             foi.seek(max(self.fp, start))
-            _len = min(size, 1024) if size > -1 else 1024
+            _len = min(size, bs) if size > -1 else bs
             self.data += foi.read(_len)
             foo.seek(self.fp)
             delta = foo.write(self.data[:_len])
